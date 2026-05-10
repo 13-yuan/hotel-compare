@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import HotelDetailPage from './pages/HotelDetailPage';
 import SearchPage from './pages/SearchPage';
@@ -33,8 +33,8 @@ function AppLayout() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AppLayout />
-    </BrowserRouter>
+    </HashRouter>
   );
 }

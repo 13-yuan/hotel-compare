@@ -9,12 +9,12 @@ export function useLocation() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 安全兜底：5秒后无论如何都结束定位状态
+    // 安全兜底：15秒后无论如何都结束定位状态
     const safetyTimer = setTimeout(() => {
       setLocation(DEFAULT_LOCATION);
       setLocating(false);
       setError('定位超时，已使用默认位置（广州）');
-    }, 5000);
+    }, 15000);
 
     if (!navigator.geolocation) {
       clearTimeout(safetyTimer);
@@ -34,13 +34,19 @@ export function useLocation() {
         setLocation(loc);
         setLocating(false);
       },
-      () => {
+      (err) => {
         clearTimeout(safetyTimer);
         setLocation(DEFAULT_LOCATION);
         setLocating(false);
-        setError('定位权限未开启，已使用默认位置（广州）');
+        if (err.code === err.PERMISSION_DENIED) {
+          setError('定位权限未开启，已使用默认位置（广州）');
+        } else if (err.code === err.TIMEOUT) {
+          setError('定位超时，已使用默认位置（广州）');
+        } else {
+          setError('定位失败，已使用默认位置（广州）');
+        }
       },
-      { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
 
     return () => clearTimeout(safetyTimer);
