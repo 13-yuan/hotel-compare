@@ -60,6 +60,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeoResult | nul
 
 export function useLocation() {
   const setLocation = useHotelStore((s) => s.setLocation);
+  const setCityName = useHotelStore((s) => s.setCityName);
   const [locating, setLocating] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentCity, setCurrentCity] = useState(DEFAULT_CITY);
@@ -71,6 +72,7 @@ export function useLocation() {
     if (saved) {
       setLocation({ latitude: saved.latitude, longitude: saved.longitude });
       setCurrentCity(saved.name);
+      setCityName(saved.name);
       setDetail(saved.detail ?? null);
       setLocating(false);
       return;
@@ -78,6 +80,7 @@ export function useLocation() {
     // 没有缓存城市：用默认位置，不自动调 GPS（手机浏览器会拦截），等用户点击按钮触发
     setLocation(DEFAULT_LOCATION);
     setCurrentCity(DEFAULT_CITY);
+    setCityName(DEFAULT_CITY);
     setDetail(null);
     setLocating(false);
     setNeedsUserAction(true);
@@ -111,12 +114,14 @@ export function useLocation() {
         const geo = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
         if (geo) {
           setCurrentCity(geo.city);
+          setCityName(geo.city);
           setDetail(geo.detail);
           saveCity({ name: geo.city, latitude: loc.latitude, longitude: loc.longitude, detail: geo.detail });
         } else {
           // 逆地理编码失败，回退到 HOT_CITIES 匹配
           const nearest = findNearestCity(loc);
           setCurrentCity(nearest.name);
+          setCityName(nearest.name);
           setDetail(null);
           saveCity(nearest);
         }
@@ -141,6 +146,7 @@ export function useLocation() {
   const selectCity = useCallback((city: CityInfo) => {
     setLocation({ latitude: city.latitude, longitude: city.longitude });
     setCurrentCity(city.name);
+    setCityName(city.name);
     setDetail(null);
     setError(null);
     setNeedsUserAction(false);

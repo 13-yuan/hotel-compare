@@ -18,7 +18,7 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchNearby();
-  }, [fetchNearby]);
+  }, [fetchNearby, currentCity]);
 
   const handleHotelClick = (hotel: Hotel) => {
     navigate(`/hotel/${hotel.id}`);
