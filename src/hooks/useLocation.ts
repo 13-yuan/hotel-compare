@@ -18,113 +18,120 @@ function saveCity(city: CityInfo) {
   } catch { /* noop */ }
 }
 
+function getPermissionHint(): string {
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+    return '请在 设置 > Safari > 位置 中选择"允许"';
+  }
+  if (/Android/.test(navigator.userAgent)) {
+    return '请点击浏览器地址栏左侧的锁图标，开启位置权限';
+  }
+  return '请在浏览器设置中允许定位权限';
+}
+
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&accept-language=zh`,
+      { signal: controller.signal },
+    );
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const a = data.address || {};
+    if (a.road) return a.road;
+    if (a.suburb) return a.suburb;
+    if (a.district) return a.district;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function useLocation() {
   const setLocation = useHotelStore((s) => s.setLocation);
   const [locating, setLocating] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentCity, setCurrentCity] = useState(DEFAULT_CITY);
+  const [detail, setDetail] = useState<string | null>(null);
+  const [needsUserAction, setNeedsUserAction] = useState(false);
 
   useEffect(() => {
     const saved = getSavedCity();
     if (saved) {
       setLocation({ latitude: saved.latitude, longitude: saved.longitude });
       setCurrentCity(saved.name);
+      setDetail(saved.detail ?? null);
       setLocating(false);
+      return;
+    }
+    // 没有缓存城市：用默认位置，不自动调 GPS（手机浏览器会拦截），等用户点击按钮触发
+    setLocation(DEFAULT_LOCATION);
+    setCurrentCity(DEFAULT_CITY);
+    setDetail(null);
+    setLocating(false);
+    setNeedsUserAction(true);
+  }, [setLocation]);
+
+  const requestGPS = useCallback((onSuccess?: () => void, onError?: () => void) => {
+    setLocating(true);
+    setError(null);
+
+    if (!navigator.geolocation) {
+      setLocating(false);
+      setError('浏览器不支持定位，请手动选择城市');
+      onError?.();
       return;
     }
 
     const safetyTimer = setTimeout(() => {
-      setLocation(DEFAULT_LOCATION);
       setLocating(false);
-      setError('定位超时，已使用默认位置（广州）');
-    }, 15000);
-
-    if (!navigator.geolocation) {
-      clearTimeout(safetyTimer);
-      setLocation(DEFAULT_LOCATION);
-      setLocating(false);
-      setError('浏览器不支持定位，已使用默认位置');
-      return;
-    }
+      setError('定位超时，请检查网络后重试');
+      onError?.();
+    }, 8000);
 
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         clearTimeout(safetyTimer);
-        const loc: Location = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        };
+        const loc: Location = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
         setLocation(loc);
         setLocating(false);
-        // 尝试匹配最近的城市
+        setNeedsUserAction(false);
         const nearest = findNearestCity(loc);
         setCurrentCity(nearest.name);
+        const addr = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        const d = addr || nearest.name;
+        setDetail(d);
+        saveCity({ ...nearest, detail: d });
+        onSuccess?.();
       },
       (err) => {
         clearTimeout(safetyTimer);
-        setLocation(DEFAULT_LOCATION);
         setLocating(false);
         if (err.code === err.PERMISSION_DENIED) {
-          setError('定位权限未开启，已使用默认位置（广州）');
+          setError(`定位权限未开启。${getPermissionHint()}`);
         } else if (err.code === err.TIMEOUT) {
-          setError('定位超时，已使用默认位置（广州）');
+          setError('定位超时，请确保网络畅通后重试');
         } else {
-          setError('定位失败，已使用默认位置（广州）');
+          setError('定位失败，请手动选择城市');
         }
+        onError?.();
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 120000 },
     );
-
-    return () => clearTimeout(safetyTimer);
   }, [setLocation]);
 
   const selectCity = useCallback((city: CityInfo) => {
     setLocation({ latitude: city.latitude, longitude: city.longitude });
     setCurrentCity(city.name);
+    setDetail(null);
     setError(null);
+    setNeedsUserAction(false);
     saveCity(city);
   }, [setLocation]);
 
-  const retryGPS = useCallback(() => {
-    setLocating(true);
-    setError(null);
-    const safetyTimer = setTimeout(() => {
-      setLocation(DEFAULT_LOCATION);
-      setLocating(false);
-      setError('定位超时，已使用默认位置（广州）');
-    }, 15000);
-
-    if (!navigator.geolocation) {
-      clearTimeout(safetyTimer);
-      setLocating(false);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        clearTimeout(safetyTimer);
-        const loc: Location = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-        setLocation(loc);
-        setLocating(false);
-        const nearest = findNearestCity(loc);
-        setCurrentCity(nearest.name);
-        // 清除手动选择，使用GPS定位
-        localStorage.removeItem(STORAGE_KEYS.SELECTED_CITY);
-      },
-      (err) => {
-        clearTimeout(safetyTimer);
-        setLocating(false);
-        if (err.code === err.PERMISSION_DENIED) {
-          setError('定位权限未开启，请手动选择城市');
-        } else {
-          setError('定位失败，请手动选择城市');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-    );
-  }, [setLocation]);
-
-  return { locating, error, currentCity, selectCity, retryGPS };
+  return { locating, error, currentCity, detail, needsUserAction, selectCity, requestGPS };
 }
 
 function findNearestCity(loc: Location): CityInfo {

@@ -7,7 +7,7 @@ interface Props {
   currentCity: string;
   onClose: () => void;
   onCitySelected: (city: CityInfo) => void;
-  onRetryGPS: () => void;
+  onRetryGPS: (onSuccess?: () => void, onError?: () => void) => void;
 }
 
 export default function CityPicker({ currentCity, onClose, onCitySelected, onRetryGPS }: Props) {
@@ -16,22 +16,9 @@ export default function CityPicker({ currentCity, onClose, onCitySelected, onRet
 
   const handleGPS = () => {
     setGpsLoading(true);
-    if (!navigator.geolocation) {
-      onRetryGPS();
-      setGpsLoading(false);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-        setGpsLoading(false);
-        onClose();
-      },
-      () => {
-        onRetryGPS();
-        setGpsLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    onRetryGPS(
+      () => { setGpsLoading(false); onClose(); },
+      () => { setGpsLoading(false); },
     );
   };
 

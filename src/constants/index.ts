@@ -58,6 +58,7 @@ export interface CityInfo {
   name: string;
   longitude: number;
   latitude: number;
+  detail?: string | null;
 }
 
 export const HOT_CITIES: CityInfo[] = [

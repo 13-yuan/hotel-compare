@@ -6,12 +6,13 @@ import HotelCard from '../components/hotel/HotelCard';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import EmptyState from '../components/common/EmptyState';
 import CityPicker from '../components/common/CityPicker';
+import LocationGate from '../components/common/LocationGate';
 import type { Hotel } from '../types/hotel';
 import type { CityInfo } from '../constants';
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { locating, error: locError, currentCity, selectCity, retryGPS } = useLocation();
+  const { locating, error: locError, currentCity, detail, needsUserAction, selectCity, requestGPS } = useLocation();
   const { hotels, loading, fetchNearby } = useHotelStore();
   const [showCityPicker, setShowCityPicker] = useState(false);
 
@@ -28,7 +29,31 @@ export default function HomePage() {
     setShowCityPicker(false);
   };
 
+  // 首次访问且无缓存 → 显示欢迎页，等用户点击 GPS 按钮
+  if (needsUserAction && !locError) {
+    return (
+      <>
+        <LocationGate
+          onRequestGPS={requestGPS}
+          locating={locating}
+          error={locError}
+          onOpenCityPicker={() => setShowCityPicker(true)}
+        />
+        {showCityPicker && (
+          <CityPicker
+            currentCity={currentCity}
+            onClose={() => setShowCityPicker(false)}
+            onCitySelected={handleCitySelected}
+            onRetryGPS={requestGPS}
+          />
+        )}
+      </>
+    );
+  }
+
   if (locating || loading) return <LoadingSkeleton />;
+
+  const displayLocation = detail || currentCity;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -40,11 +65,18 @@ export default function HomePage() {
             onClick={() => setShowCityPicker(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: 2,
-              cursor: 'pointer', flexShrink: 0,
+              cursor: 'pointer', flexShrink: 0, maxWidth: '45%',
             }}
           >
-            <span style={{ fontSize: 22, fontWeight: 700, color: '#1a1a1a' }}>{currentCity}</span>
-            <span style={{ fontSize: 12, color: '#999', marginTop: 2 }}>▾</span>
+            <span
+              style={{
+                fontSize: detail ? 16 : 22, fontWeight: 700, color: '#1a1a1a',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+            >
+              {displayLocation}
+            </span>
+            <span style={{ fontSize: 12, color: '#999', marginTop: 2, flexShrink: 0 }}>▾</span>
           </div>
 
           {/* 搜索入口 */}
@@ -83,7 +115,7 @@ export default function HomePage() {
           currentCity={currentCity}
           onClose={() => setShowCityPicker(false)}
           onCitySelected={handleCitySelected}
-          onRetryGPS={retryGPS}
+          onRetryGPS={requestGPS}
         />
       )}
     </div>
