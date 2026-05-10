@@ -30,7 +30,6 @@ export const useHotelStore = create<HotelState>((set, get) => ({
     set({ loading: true, error: null });
     await new Promise((r) => setTimeout(r, 600));
     const { location, cityName } = get();
-    // 优先匹配同城酒店
     const cityHotels = mockHotels.filter((h) => h.city === cityName);
     const source = cityHotels.length > 0 ? cityHotels : mockHotels;
     const withDistance = source
