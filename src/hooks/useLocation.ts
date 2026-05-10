@@ -3,6 +3,7 @@ import type { Location } from '../types/hotel';
 import type { CityInfo } from '../constants';
 import { useHotelStore } from '../stores/hotelStore';
 import { DEFAULT_LOCATION, DEFAULT_CITY, HOT_CITIES, STORAGE_KEYS } from '../constants';
+import { reverseGeocode as baiduReverse } from '../services/hotelApi';
 
 function getSavedCity(): CityInfo | null {
   try {
@@ -110,8 +111,14 @@ export function useLocation() {
         setLocation(loc);
         setLocating(false);
         setNeedsUserAction(false);
-        // 逆地理编码获取真实城市名
-        const geo = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        // 逆地理编码：优先用百度，失败再用 OpenStreetMap
+        let geo: GeoResult | null = null;
+        try {
+          const bd = await baiduReverse(pos.coords.latitude, pos.coords.longitude);
+          geo = { city: bd.city, detail: bd.address };
+        } catch {
+          geo = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        }
         if (geo) {
           setCurrentCity(geo.city);
           setCityName(geo.city);
