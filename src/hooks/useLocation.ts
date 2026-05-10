@@ -28,7 +28,12 @@ function getPermissionHint(): string {
   return '请在浏览器设置中允许定位权限';
 }
 
-async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+interface GeoResult {
+  city: string;
+  detail: string | null;
+}
+
+async function reverseGeocode(lat: number, lng: number): Promise<GeoResult | null> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
@@ -40,10 +45,14 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
     if (!res.ok) return null;
     const data = await res.json();
     const a = data.address || {};
-    if (a.road) return a.road;
-    if (a.suburb) return a.suburb;
-    if (a.district) return a.district;
-    return null;
+    // 从返回数据中提取城市名（优先级：city > town > county > state_district）
+    const city = a.city || a.town || a.county || a.state_district || a.state || null;
+    if (!city) return null;
+    // 去掉"市"后缀，统一格式
+    const cityName = city.replace(/[市地区]$/, '');
+    // 街道/区信息
+    const detail = a.road || a.suburb || a.district || a.city_district || null;
+    return { city: cityName, detail };
   } catch {
     return null;
   }
@@ -98,12 +107,19 @@ export function useLocation() {
         setLocation(loc);
         setLocating(false);
         setNeedsUserAction(false);
-        const nearest = findNearestCity(loc);
-        setCurrentCity(nearest.name);
-        const addr = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-        const d = addr || nearest.name;
-        setDetail(d);
-        saveCity({ ...nearest, detail: d });
+        // 逆地理编码获取真实城市名
+        const geo = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        if (geo) {
+          setCurrentCity(geo.city);
+          setDetail(geo.detail);
+          saveCity({ name: geo.city, latitude: loc.latitude, longitude: loc.longitude, detail: geo.detail });
+        } else {
+          // 逆地理编码失败，回退到 HOT_CITIES 匹配
+          const nearest = findNearestCity(loc);
+          setCurrentCity(nearest.name);
+          setDetail(null);
+          saveCity(nearest);
+        }
         onSuccess?.();
       },
       (err) => {
